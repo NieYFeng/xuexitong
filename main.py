@@ -1,7 +1,7 @@
 import time
 import traceback
 from selenium import webdriver
-from selenium.common import TimeoutException
+from selenium.common import TimeoutException, NoSuchElementException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -24,7 +24,7 @@ def videoPlay(title=None):
     try:
         # 打开课程页面
         if flag == False :
-            course_url = "https://mooc1.chaoxing.com/mycourse/studentstudy?chapterId=890225765&courseId=245132854&clazzid=103411235&cpi=413412552&enc=f34e59657449d9213f195ea6ebd44042&mooc2=1&openc=0180e064a1003615e8286f2635a46ce8"
+            course_url = "https://mooc1.chaoxing.com/mycourse/studentstudy?chapterId=890225739&courseId=245132854&clazzid=103411235&cpi=413412552&enc=f34e59657449d9213f195ea6ebd44042&mooc2=1&openc=0180e064a1003615e8286f2635a46ce8"
             flag = True
         else:
             current_url = driver.current_url
@@ -41,7 +41,7 @@ def videoPlay(title=None):
         driver.switch_to.frame(inner_iframe)
         print("成功切换到内层 iframe")
 
-
+        # 播放视频
         play_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".vjs-big-play-button")))
         play_button.click()
         print("播放按钮点击成功")
@@ -52,27 +52,27 @@ def videoPlay(title=None):
                 handleQuizPopup()  # 处理题目弹窗
 
             # 获取播放进度条
-            progress = driver.find_element(By.CSS_SELECTOR, '[class="vjs-play-progress vjs-slider-bar"]').get_attribute(
-                "style")
+            progress = driver.find_element(By.CSS_SELECTOR,
+                                           '[class="vjs-play-progress vjs-slider-bar"]').get_attribute("style")
             time.sleep(1)
             programRunningTime += 1  # 记录程序运行秒数
 
             if endPlayTime == "00:00":
-                endPlayTime = driver.find_element(By.CSS_SELECTOR, '.vjs-duration-display').text  # 结束时间
+                endPlayTime = driver.find_element(By.CSS_SELECTOR, '.vjs-duration-display').text  # 获取视频结束时间
 
-            if progress.split(" ")[1] == "100%;":  # 当播放进度达到100% 就处理选择题并切换下一任务点
+            if progress.split(" ")[1] == "100%;":  # 当播放进度达到100%
                 print("视频播放结束")
                 nextChapterChange()
-                print("处理选择题")
-                handleQuestions(driver)  # 处理选择题
-                print("选择题处理完毕，进入下一章学习")
-                # 检查是否有弹窗并点击提交按钮
-                if (checkConfirmPopup()):
-                    submit_button = wait.until(EC.element_to_be_clickable((By.ID, 'popok')))
-                    submit_button.click()
-                print("进入下一章")
-                nextChapterChange()
-                videoPlay()
+                print("点击下一章")
+                break
+
+        handleQuestions(driver)  # 处理选择题
+        print("选择题处理完毕，进入下一章学习")
+        if checkConfirmPopup():
+            submit_button = wait.until(EC.element_to_be_clickable((By.ID, 'popok')))
+            submit_button.click()
+        nextChapterChange()
+        videoPlay()
 
     except TimeoutException as e:
         print("未找到指定元素", e)
@@ -82,6 +82,34 @@ def videoPlay(title=None):
         print("遇到异常：", e)
         traceback.print_exc()
 
+
+def check_and_click_next_section():
+    try:
+        # 定位到任务点的元素
+        task_element = driver.find_element(By.CSS_SELECTOR, 'div.ans-job-icon.ans-job-icon-clear')
+
+        # 检查 aria-label 的值是否为 '任务点已完成'
+        aria_label = task_element.get_attribute('aria-label')
+
+        if aria_label == "任务点已完成":
+            print("任务已完成，准备点击下一节...")
+        else:
+            print("任务尚未完成。")
+
+    except NoSuchElementException:
+        print("未找到任务点元素。")
+
+
+def checkVideoPlay():
+    try:
+        time.sleep(2)
+        # 检查是否存在视频 iframe
+        driver.find_element(By.CSS_SELECTOR, "iframe.ans-insertvideo-online")
+        print("检测到视频，准备播放")
+        return True
+    except Exception:
+        print("未检测到视频，可能是做题页面")
+        return False
 
 def checkForQuizPopup():
     try:
@@ -189,7 +217,7 @@ def handleQuizPopup():
                     print("未知的题型")
 
         time.sleep(2)  # 休眠2秒，确保提交完成
-
+        checkAndClickContinueButton()
     except TimeoutException as e:
         print("处理题目弹窗时未找到指定元素", e)
         traceback.print_exc()
@@ -198,14 +226,27 @@ def handleQuizPopup():
         print("遇到异常：", e)
         traceback.print_exc()
 
-def handle_single_choice(quiz_options, wait):
-    # 先尝试选择 A
-    is_answer_correct = try_answer(quiz_options, 'A', wait)
 
-    # 如果 A 错误，再尝试 B
-    if not is_answer_correct:
-        print("选项 A 错误，尝试选择 B")
-        try_answer(quiz_options, 'B', wait)
+def checkAndClickContinueButton():
+    try:
+        # 查找 "继续学习" 按钮
+        continue_button = driver.find_element(By.ID, "videoquiz-continue")
+        if continue_button.is_displayed():
+            continue_button.click()
+        else:
+            print("继续学习按钮不可见")
+
+    except NoSuchElementException:
+        # 如果没有找到按钮
+        print("继续学习按钮不存在，忽略")
+
+
+def handle_single_choice(quiz_options, wait):
+    ans_list = ['A', 'B', 'C', 'D']
+    for ans in ans_list:
+        is_answer_correct = try_answer(quiz_options, ans, wait)
+        if not is_answer_correct:
+            print("选项{ans}错误")
 
 def handle_multiple_choice(quiz_options, wait):
 
@@ -285,6 +326,9 @@ def nextChapterChange():
     next_button.click()
     print("点击 '下一节' 按钮成功")
     time.sleep(2)  # 休眠2秒，等页面完全打开再进行下一步操作
+    # 等待页面加载完成并检查新页面的加载情况
+    wait.until(EC.presence_of_element_located((By.ID, "iframe")))  # 动态等待 iframe 加载
+    print("下一节页面加载完成")
 
 
 # 主函数
