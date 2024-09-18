@@ -24,7 +24,7 @@ def videoPlay(title=None):
     try:
         # 打开课程页面
         if flag == False :
-            course_url = "https://mooc1.chaoxing.com/mycourse/studentstudy?chapterId=890225739&courseId=245132854&clazzid=103411235&cpi=413412552&enc=f34e59657449d9213f195ea6ebd44042&mooc2=1&openc=0180e064a1003615e8286f2635a46ce8"
+            course_url = "https://mooc1.chaoxing.com/mycourse/studentstudy?chapterId=890225734&courseId=245132854&clazzid=103411235&cpi=413412582&enc=7e7df62a63de59c6ac67c11616c476f5&mooc2=1&openc=bb84cbd960a5e4267d4f25e7ace9f92c"
             flag = True
         else:
             current_url = driver.current_url
@@ -65,12 +65,24 @@ def videoPlay(title=None):
                 nextChapterChange()
                 print("点击下一章")
                 break
-
-        handleQuestions(driver)  # 处理选择题
+        if checkQuestions(driver):
+            print("需要做题")
+        else:
+            print("不需要")
+        time.sleep(1)
         print("选择题处理完毕，进入下一章学习")
         if checkConfirmPopup():
             submit_button = wait.until(EC.element_to_be_clickable((By.ID, 'popok')))
             submit_button.click()
+        time.sleep(3)
+        if checkForSubmitPopup():
+            print("弹出提交弹窗")
+        else:
+            print("未弹出提交弹窗")
+        if checkForNextChapter():
+            print("弹出提交弹窗2")
+        else:
+            print("未弹出提交弹窗2")
         nextChapterChange()
         videoPlay()
 
@@ -82,34 +94,29 @@ def videoPlay(title=None):
         print("遇到异常：", e)
         traceback.print_exc()
 
-
-def check_and_click_next_section():
+def checkForNextChapter():
     try:
-        # 定位到任务点的元素
-        task_element = driver.find_element(By.CSS_SELECTOR, 'div.ans-job-icon.ans-job-icon-clear')
-
-        # 检查 aria-label 的值是否为 '任务点已完成'
-        aria_label = task_element.get_attribute('aria-label')
-
-        if aria_label == "任务点已完成":
-            print("任务已完成，准备点击下一节...")
+        # 查找 "下一节" 按钮
+        next_button = driver.find_element(By.CSS_SELECTOR, '.jb_btn.jb_btn_92.fr.fs14.nextChapter')
+        if next_button.is_displayed():  # 检查按钮是否可见
+            next_button.click()  # 点击按钮
+            return True
         else:
-            print("任务尚未完成。")
-
-    except NoSuchElementException:
-        print("未找到任务点元素。")
-
-
-def checkVideoPlay():
-    try:
-        time.sleep(2)
-        # 检查是否存在视频 iframe
-        driver.find_element(By.CSS_SELECTOR, "iframe.ans-insertvideo-online")
-        print("检测到视频，准备播放")
-        return True
+            return False
     except Exception:
-        print("未检测到视频，可能是做题页面")
         return False
+
+
+def checkForSubmitPopup():
+    try:
+        # 检查提交弹窗是否存在（通过检查下一节按钮是否显示）
+        next_button = driver.find_element(By.CSS_SELECTOR, '.bluebtn02.prebutton.nextChapter')
+        if next_button.is_displayed():  # 检查按钮是否可见
+            next_button.click()  # 点击下一节按钮
+            return True
+    except Exception:
+        return False
+
 
 def checkForQuizPopup():
     try:
@@ -127,6 +134,12 @@ def checkConfirmPopup():
     except Exception:
         return False
 
+def checkQuestions(driver):
+    try:
+        handleQuestions(driver)
+        return False
+    except Exception:
+        return True
 
 def handleQuestions(driver):
 
@@ -139,8 +152,6 @@ def handleQuestions(driver):
         # 如果需要，可以等待第一个 iframe 的内容加载
         time.sleep(2)  # 根据实际情况调整时间
 
-        # 切换到第二个 iframe
-        # 查找第二个 iframe 的元素，这里假设它是当前 iframe 的子元素
         driver.switch_to.frame(driver.find_element(By.CSS_SELECTOR, "iframe[src*='work/index.html']"))
         print("切换到第二个 iframe")
 
@@ -156,7 +167,6 @@ def handleQuestions(driver):
             question_type_element = question.find_element(By.CSS_SELECTOR, 'li[role="radio"], li[role="checkbox"]')
             question_type = question_type_element.get_attribute("qtype")  # 获取题目的 qtype 属性
             if question_type == "0":
-                # 单选题 - 选择第一个选项（A）
                 single_choice = driver.find_element(By.CSS_SELECTOR,
                                                     '.ZyBottom .singleQuesId li[role="radio"] span[data="A"]')
                 single_choice.click()
@@ -168,7 +178,10 @@ def handleQuestions(driver):
             else:
                 answer_A = question.find_element(By.CSS_SELECTOR, 'li[role="checkbox"] span[data="A"]')
                 answer_A.click()
-                print("多选题：选择了选项 A")
+                time.sleep(1)
+                answer_B = question.find_element(By.CSS_SELECTOR, 'li[role="checkbox"] span[data="B"]')
+                answer_B.click()
+                print("多选题：选择了选项 AB")
 
         # 查找并点击提交按钮
         try:
@@ -329,7 +342,6 @@ def nextChapterChange():
     # 等待页面加载完成并检查新页面的加载情况
     wait.until(EC.presence_of_element_located((By.ID, "iframe")))  # 动态等待 iframe 加载
     print("下一节页面加载完成")
-
 
 # 主函数
 def main():
